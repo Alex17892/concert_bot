@@ -15,7 +15,6 @@ cities = {
 # Время концертов
 times = [f"{h}:00" for h in range(10, 21)]
 
-
 # Создание таблицы
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS tickets (
@@ -30,23 +29,29 @@ CREATE TABLE IF NOT EXISTS tickets (
 """)
 conn.commit()
 
-
 # Генерация билетов на 7 дней вперёд
 def generate_new_day():
     today = datetime.now()
-
     for day_offset in range(7):
         concert_date = (today + timedelta(days=day_offset)).strftime("%Y-%m-%d")
-
         for city, seats in cities.items():
             for seat in seats:
                 for t in times:
-
-                    # создаём 30 билетов на каждую комбинацию
-                    for _ in range(30):
-                        cursor.execute("""
-                            INSERT INTO tickets (date, city, seat, time, is_sold)
-                            VALUES (?, ?, ?, ?, 0)
-                        """, (concert_date, city, seat, t))
-
+                    # Проверяем, есть ли уже билеты на эту дату и город, чтобы не дублировать
+                    cursor.execute("SELECT id FROM tickets WHERE date=? AND city=? AND seat=? AND time=? LIMIT 1", 
+                                 (concert_date, city, seat, t))
+                    if not cursor.fetchone():
+                        # создаём по 5 билетов на каждую комбинацию (30 может быть много для теста)
+                        for _ in range(5):
+                            cursor.execute("""
+                                INSERT INTO tickets (date, city, seat, time, is_sold)
+                                VALUES (?, ?, ?, ?, 0)
+                            """, (concert_date, city, seat, t))
     conn.commit()
+
+# --- ВАЖНОЕ ДОПОЛНЕНИЕ ---
+# Запускаем генерацию сразу при запуске бота, если база пуста
+cursor.execute("SELECT COUNT(*) FROM tickets")
+if cursor.fetchone()[0] == 0:
+    print("База пуста, генерирую билеты...")
+    generate_new_day()
