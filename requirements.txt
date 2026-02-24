@@ -1,4 +1,4 @@
-aiogram==3.4.1
+aiogram
+qrcode
+Pillow
 apscheduler
-qrcode[pil]
-pillow
