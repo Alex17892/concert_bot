@@ -1,9 +1,8 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from database import generate_new_day
-
-scheduler = AsyncIOScheduler()
+from database import generate_tickets_if_empty
 
 def start_scheduler():
-    # Запуск генерации билетов каждый день в 00:00
-    scheduler.add_job(generate_new_day, "cron", hour=0, minute=0)
+    scheduler = AsyncIOScheduler()
+    # Раз в сутки проверяем и добавляем билеты, если база пуста
+    scheduler.add_job(generate_tickets_if_empty, "interval", hours=24)
     scheduler.start()
