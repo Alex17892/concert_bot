@@ -1,57 +1,46 @@
 import sqlite3
-from datetime import datetime, timedelta
 
-# Подключение к базе
-conn = sqlite3.connect("tickets.db")
-cursor = conn.cursor()
+# Путь к твоей базе данных
+DB_PATH = 'database.db'
 
-# Города и места
-cities = {
-    "Москва": ["Лежачее", "Сидячее", "Стоячее"],
-    "Тула": ["Сидячее", "Лежачее", "Стоячее"],
-    "Солнечногорск": ["Стоячее"]
-}
+def get_connection():
+    # Параметр check_same_thread=False критически важен для работы с APScheduler
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
 
-# Время концертов
-times = [f"{h}:00" for h in range(10, 21)]
+def init_db():
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT,
+                city TEXT,
+                seat TEXT,
+                time TEXT,
+                status TEXT DEFAULT 'available'
+            )
+        ''')
+        conn.commit()
 
-# Создание таблицы
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS tickets (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    date TEXT,
-    city TEXT,
-    seat TEXT,
-    time TEXT,
-    is_sold INTEGER DEFAULT 0,
-    user_id INTEGER
-)
-""")
-conn.commit()
+def generate_new_day(date_str, city, seats_list, time_str):
+    """Исправленная функция генерации билетов"""
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            # Тот самый запрос из твоей ошибки
+            for seat in seats_list:
+                cursor.execute(
+                    "SELECT id FROM tickets WHERE date=? AND city=? AND seat=? AND time=? LIMIT 1",
+                    (date_str, city, seat, time_str)
+                )
+                if not cursor.fetchone():
+                    cursor.execute(
+                        "INSERT INTO tickets (date, city, seat, time) VALUES (?, ?, ?, ?)",
+                        (date_str, city, seat, time_str)
+                    )
+            conn.commit()
+    except Exception as e:
+        print(f"Ошибка при работе с БД: {e}")
 
-# Генерация билетов на 7 дней вперёд
-def generate_new_day():
-    today = datetime.now()
-    for day_offset in range(7):
-        concert_date = (today + timedelta(days=day_offset)).strftime("%Y-%m-%d")
-        for city, seats in cities.items():
-            for seat in seats:
-                for t in times:
-                    # Проверяем, есть ли уже билеты на эту дату и город, чтобы не дублировать
-                    cursor.execute("SELECT id FROM tickets WHERE date=? AND city=? AND seat=? AND time=? LIMIT 1", 
-                                 (concert_date, city, seat, t))
-                    if not cursor.fetchone():
-                        # создаём по 5 билетов на каждую комбинацию (30 может быть много для теста)
-                        for _ in range(5):
-                            cursor.execute("""
-                                INSERT INTO tickets (date, city, seat, time, is_sold)
-                                VALUES (?, ?, ?, ?, 0)
-                            """, (concert_date, city, seat, t))
-    conn.commit()
-
-# --- ВАЖНОЕ ДОПОЛНЕНИЕ ---
-# Запускаем генерацию сразу при запуске бота, если база пуста
-cursor.execute("SELECT COUNT(*) FROM tickets")
-if cursor.fetchone()[0] == 0:
-    print("База пуста, генерирую билеты...")
-    generate_new_day()
+# Добавь сюда остальные свои функции работы с БД (get_tickets и т.д.), 
+# используя шаблон 'with get_connection() as conn:'
